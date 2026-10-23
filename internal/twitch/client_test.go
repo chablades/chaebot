@@ -108,11 +108,9 @@ func TestRefreshOnAuthFailure(t *testing.T) {
 }
 
 func TestAuthFailureAfterRefreshIsFatal(t *testing.T) {
-	fail := func(string, net.Conn) {}
 	fake := newFakeTwitch(t,
 		func(_ string, conn net.Conn) { send(conn, authFailed) },
 		func(_ string, conn net.Conn) { send(conn, authFailed) },
-		fail,
 	)
 	var refreshes int
 	c := &Client{Username: "chae_bot", Token: "old", Channel: "chablades", dial: fake.dial}

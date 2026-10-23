@@ -21,10 +21,13 @@ func main() {
 		log.Fatal(err)
 	}
 	username := requireEnv("CHAEBOT_TWITCH_USERNAME")
-	token := requireEnv("CHAEBOT_TWITCH_TOKEN")
 	channel := requireEnv("CHAEBOT_TWITCH_CHANNEL")
 
 	dataDir, err := dataDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	token, refresh, err := twitchAuth(filepath.Join(dataDir, "twitch_token.json"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,7 +41,7 @@ func main() {
 		commands.NewHandler(store),
 	}
 
-	tw := &twitch.Client{Username: username, Token: token, Channel: channel}
+	tw := &twitch.Client{Username: username, Token: token, Channel: channel, Refresh: refresh}
 	tw.OnMessage = func(msg chat.Message) {
 		chat.Dispatch(handlers, msg, tw.Say)
 	}
@@ -82,7 +85,10 @@ func loadDotEnv(path string) error {
 		if !ok {
 			return fmt.Errorf("%s:%d: expected KEY=VALUE", path, i+1)
 		}
-		key, value = strings.TrimSpace(key), strings.Trim(strings.TrimSpace(value), `"'`)
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if n := len(value); n >= 2 && (value[0] == '"' || value[0] == '\'') && value[n-1] == value[0] {
+			value = value[1 : n-1]
+		}
 		if _, set := os.LookupEnv(key); !set {
 			os.Setenv(key, value)
 		}

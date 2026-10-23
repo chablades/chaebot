@@ -22,10 +22,23 @@ go run ./cmd/chaebot
 
 `.env` is gitignored. Real environment variables take precedence over it.
 
+### Token refresh
+
+Twitch user tokens expire after a few hours. The bot keeps working on its
+current connection, but can't log back in after a disconnect. To have it
+refresh the token on its own, register an app at
+https://dev.twitch.tv/console/apps, get a refresh token for the bot account
+issued to that app, and set `CHAEBOT_TWITCH_CLIENT_ID`,
+`CHAEBOT_TWITCH_CLIENT_SECRET` and `CHAEBOT_TWITCH_REFRESH_TOKEN` in `.env`
+(see `.env.example`). Refreshed tokens are saved to `twitch_token.json` in
+the data folder; pasting a different refresh token into `.env` replaces
+them.
+
 Saved data lives in `%AppData%\Chaebot` (override with `CHAEBOT_DATA_DIR`).
 
 Make the bot account a moderator in the channel (`/mod chae_bot`) so Twitch
-gives it the higher chat rate limit.
+gives it the higher chat rate limit (100 messages per 30 seconds instead of
+20); the bot detects this on its own.
 
 ## Custom commands
 
