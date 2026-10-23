@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -91,5 +93,20 @@ func TestTwitchAuth(t *testing.T) {
 	set("pasted", "id", "other-seed")
 	if tok, _, _ := twitchAuth(path); tok != "pasted" {
 		t.Errorf("new .env refresh token ignored: got %q", tok)
+	}
+}
+
+func TestRunAllStopsOnFailure(t *testing.T) {
+	boom := errors.New("boom")
+	stopped := make(chan bool, 1)
+	err := runAll(context.Background(), []platform{
+		{name: "a", run: func(ctx context.Context) error { <-ctx.Done(); stopped <- true; return nil }},
+		{name: "b", run: func(context.Context) error { return boom }},
+	})
+	if !errors.Is(err, boom) || err.Error() != "b: boom" {
+		t.Errorf("runAll = %v", err)
+	}
+	if !<-stopped {
+		t.Error("other platform wasn't stopped")
 	}
 }

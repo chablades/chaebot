@@ -3,12 +3,14 @@ personal bot for Twitch on www.twitch.tv/chablades
 
 ## Status
 
-Built so far: **dynamic custom commands** (spec feature 1), on Twitch chat.
-The YouTube listener and the Wails desktop UI are not built yet.
+Built so far, on Twitch and YouTube chat: **dynamic custom commands** (spec
+feature 1) with variables and cooldowns, and **timed messages**. Commands
+and timers are shared across both platforms. The Wails desktop UI is not
+built yet.
 
 ## Running
 
-Chaebot needs a Twitch account for the bot and a user OAuth token for it
+For Twitch, Chaebot needs a Twitch account for the bot and a user OAuth token for it
 with the `chat:read` and `chat:edit` scopes (for example from
 https://twitchtokengenerator.com, or your own Twitch app).
 
@@ -39,6 +41,33 @@ Saved data lives in `%AppData%\Chaebot` (override with `CHAEBOT_DATA_DIR`).
 Make the bot account a moderator in the channel (`/mod chae_bot`) so Twitch
 gives it the higher chat rate limit (100 messages per 30 seconds instead of
 20); the bot detects this on its own.
+
+### YouTube
+
+YouTube is enabled when `CHAEBOT_YOUTUBE_CLIENT_ID` is set. You need:
+
+1. A Google Cloud project with the **YouTube Data API v3** enabled, and an
+   OAuth client (type "Desktop app"). Publish the app's consent screen to
+   production: while it's in testing, Google expires refresh tokens after
+   7 days.
+2. A refresh token for **the channel that streams**, with the
+   `https://www.googleapis.com/auth/youtube` scope. One way is the
+   [OAuth 2.0 Playground](https://developers.google.com/oauthplayground):
+   under settings, tick "Use your own OAuth credentials" and enter your
+   client ID and secret, authorize that scope, then exchange the code for
+   tokens.
+
+The bot finds that channel's live stream by itself, checking every two
+minutes while offline, and **posts as that channel**. The streamer's own
+messages still run commands; the bot recognizes and skips its own replies.
+Replies are cut to YouTube's 200-character limit.
+
+YouTube API calls use quota, 10,000 units a day by default. Reading chat
+costs 5 units per read and each bot reply costs about 20, so the default of
+one read every 15 seconds uses roughly 1,200 units an hour of streaming
+plus replies. Raise `CHAEBOT_YOUTUBE_POLL_SECONDS` for long streams, or
+request more quota from Google. If quota runs out, the bot waits 30 minutes
+between retries.
 
 ## Custom commands
 
@@ -89,4 +118,5 @@ timer, delete and re-add it.
 - `internal/timers`: timed messages
 - `internal/jsonfile`: atomic JSON file saves shared by the stores
 - `internal/twitch`: Twitch IRC client
+- `internal/youtube`: YouTube live chat client (Data API polling)
 - `cmd/chaebot`: entry point
