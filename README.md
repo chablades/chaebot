@@ -47,15 +47,30 @@ gives it the higher chat rate limit (100 messages per 30 seconds instead of
 | `$addcommand $trigger response` | mods + broadcaster | `$addcommand $discord Join us at discord.gg/xyz` |
 | `$editcommand $trigger response` | mods + broadcaster | `$editcommand $discord New link: discord.gg/abc` |
 | `$delcommand $trigger` | mods + broadcaster | `$delcommand $discord` |
+| `$cooldown $trigger seconds` | mods + broadcaster | `$cooldown $discord 30` |
+| `$commands` | everyone | lists all custom commands |
 | `$trigger` | everyone | `$discord` |
 
 All commands start with `$` (set by `chat.Prefix` in `internal/chat/chat.go`). Triggers are case-insensitive. The bot ignores management commands from
 non-mods and rejects responses that start with `/` or `.` or are over
 Twitch's 500-character limit.
 
+Responses can include variables:
+
+| Variable | Becomes | Example response → output |
+|---|---|---|
+| `{user}` | who used the command | `{user} hugs {touser}!` → `cha hugs Friend!` for `$hug @Friend` |
+| `{touser}` | first word after the command, without `@`; `{user}` if none | |
+| `{args}` | everything after the command | `You said: {args}` |
+| `{count}` | times the command has been used | `Deaths: {count}` → `Deaths: 7` |
+
+Each command has a per-platform cooldown, 5 seconds by default, during
+which viewers' uses are ignored. Mods and the broadcaster skip cooldowns.
+
 ## Layout
 
 - `internal/chat`: platform-neutral message type and handler interface
 - `internal/commands`: custom command store (JSON) and chat handler
+- `internal/jsonfile`: atomic JSON file saves shared by the stores
 - `internal/twitch`: Twitch IRC client
 - `cmd/chaebot`: entry point

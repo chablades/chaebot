@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
+	"chaebot/internal/jsonfile"
 	"chaebot/internal/twitch"
 )
 
@@ -62,31 +60,11 @@ func twitchAuth(path string) (token string, refresh func(context.Context) (strin
 // loadTokens reads path, returning zero tokens if it doesn't exist.
 func loadTokens(path string) (savedTokens, error) {
 	var t savedTokens
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return t, nil
-	}
-	if err != nil {
-		return t, err
-	}
-	if err := json.Unmarshal(data, &t); err != nil {
-		return t, fmt.Errorf("parse %s: %w", path, err)
-	}
-	return t, nil
+	err := jsonfile.Load(path, &t)
+	return t, err
 }
 
-// saveTokens writes atomically, readable only by the current user.
+// saveTokens writes path readable only by the current user.
 func saveTokens(path string, t savedTokens) error {
-	data, err := json.MarshalIndent(t, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return jsonfile.Save(path, t, 0o600)
 }

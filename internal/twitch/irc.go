@@ -127,14 +127,23 @@ func (c *Client) Say(text string) {
 		return
 	}
 	c.sent = append(c.sent, now)
-	// IRC lines end at a newline, so collapse any to keep the message whole.
-	text = strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
+	text = sanitize(text)
 	if err := c.write("PRIVMSG #%s :%s", c.Channel, text); err != nil {
 		log.Printf("twitch: send failed: %v", err)
 		// A timed-out write leaves the connection unusable; closing it
 		// makes the reader reconnect.
 		c.conn.Close()
 	}
+}
+
+// sanitize makes text safe to send as one chat message. Responses can
+// include viewer text through variables like {args}, so this is the last
+// line of defense against the bot running a chat command like "/ban".
+func sanitize(text string) string {
+	// IRC lines end at a newline, so collapse any to keep the message whole.
+	text = strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
+	text = strings.TrimLeft(text, " \t/.")
+	return chat.Truncate(text, chat.MaxLen)
 }
 
 // session runs one connection until it fails. loggedIn reports whether

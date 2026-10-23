@@ -1,6 +1,7 @@
 package twitch
 
 import (
+	"strings"
 	"testing"
 
 	"chaebot/internal/chat"
@@ -58,6 +59,20 @@ func TestUnescapeTag(t *testing.T) {
 	} {
 		if got := unescapeTag(in); got != want {
 			t.Errorf("unescapeTag(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSanitize(t *testing.T) {
+	for in, want := range map[string]string{
+		"hello":                  "hello",
+		"/ban someone":           "ban someone",
+		" ./.timeout x":          "timeout x",
+		"line\r\nbreak":          "line  break",
+		strings.Repeat("é", 600): strings.Repeat("é", 500),
+	} {
+		if got := sanitize(in); got != want {
+			t.Errorf("sanitize(%.20q) = %.20q, want %.20q", in, got, want)
 		}
 	}
 }
