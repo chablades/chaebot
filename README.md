@@ -67,10 +67,26 @@ Responses can include variables:
 Each command has a per-platform cooldown, 5 seconds by default, during
 which viewers' uses are ignored. Mods and the broadcaster skip cooldowns.
 
+## Timers
+
+Timers post a message on a schedule, for example a reminder to follow.
+
+| Command | Who | Example |
+|---|---|---|
+| `$addtimer name minutes message` | mods + broadcaster | `$addtimer socials 15 Follow me on twitter.com/x` |
+| `$deltimer name` | mods + broadcaster | `$deltimer socials` |
+| `$timers` | mods + broadcaster | lists timers |
+
+Intervals are 5 to 1440 minutes. A timer only posts in a chat that has had
+at least 5 messages since it last posted there, so it won't fill a quiet
+chat, and at most one timer posts per chat every 30 seconds. To change a
+timer, delete and re-add it.
+
 ## Layout
 
 - `internal/chat`: platform-neutral message type and handler interface
 - `internal/commands`: custom command store (JSON) and chat handler
+- `internal/timers`: timed messages
 - `internal/jsonfile`: atomic JSON file saves shared by the stores
 - `internal/twitch`: Twitch IRC client
 - `cmd/chaebot`: entry point

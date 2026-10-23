@@ -13,6 +13,7 @@ import (
 
 	"chaebot/internal/chat"
 	"chaebot/internal/commands"
+	"chaebot/internal/timers"
 	"chaebot/internal/twitch"
 )
 
@@ -35,10 +36,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("loaded %d custom commands from %s", len(store.Triggers()), dataDir)
+	sched, err := timers.Open(filepath.Join(dataDir, "timers.json"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("loaded %d custom commands and %d timers from %s", len(store.Triggers()), sched.Len(), dataDir)
 
 	handlers := []chat.Handler{
-		commands.NewHandler(store),
+		sched, // first, so it sees every message to measure activity
+		commands.NewHandler(store, timers.Builtins...),
 	}
 
 	tw := &twitch.Client{Username: username, Token: token, Channel: channel, Refresh: refresh}
@@ -48,6 +54,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	go sched.Run(ctx, map[chat.Platform]func(string){chat.Twitch: tw.Say})
 	if err := tw.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
