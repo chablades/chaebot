@@ -1,5 +1,5 @@
 // Package commands implements dynamic custom commands that mods manage
-// live from chat with !addcommand, !editcommand and !delcommand.
+// live from chat with $addcommand, $editcommand and $delcommand.
 package commands
 
 import (
@@ -18,7 +18,7 @@ var (
 )
 
 // Store is the shared custom command list, persisted as a JSON object
-// mapping trigger (e.g. "!discord") to response. It is safe for concurrent
+// mapping trigger (e.g. "$discord") to response. It is safe for concurrent
 // use so both platform listeners can share one instance.
 type Store struct {
 	mu   sync.RWMutex

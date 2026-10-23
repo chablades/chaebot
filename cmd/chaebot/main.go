@@ -3,10 +3,13 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 
 	"chaebot/internal/chat"
 	"chaebot/internal/commands"
@@ -14,6 +17,9 @@ import (
 )
 
 func main() {
+	if err := loadDotEnv(".env"); err != nil {
+		log.Fatal(err)
+	}
 	username := requireEnv("CHAEBOT_TWITCH_USERNAME")
 	token := requireEnv("CHAEBOT_TWITCH_TOKEN")
 	channel := requireEnv("CHAEBOT_TWITCH_CHANNEL")
@@ -55,6 +61,33 @@ func dataDir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(base, "Chaebot"), nil
+}
+
+// loadDotEnv sets KEY=VALUE pairs from path as environment variables,
+// without overriding ones already set. A missing file is not an error.
+func loadDotEnv(path string) error {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for i, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			return fmt.Errorf("%s:%d: expected KEY=VALUE", path, i+1)
+		}
+		key, value = strings.TrimSpace(key), strings.Trim(strings.TrimSpace(value), `"'`)
+		if _, set := os.LookupEnv(key); !set {
+			os.Setenv(key, value)
+		}
+	}
+	return nil
 }
 
 func requireEnv(key string) string {

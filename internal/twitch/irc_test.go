@@ -12,16 +12,16 @@ func TestParsePrivmsg(t *testing.T) {
 		want chat.Message
 	}{
 		{
-			"@badge-info=;badges=moderator/1;display-name=SomeMod;mod=1;user-id=1 :somemod!somemod@somemod.tmi.twitch.tv PRIVMSG #chablades :!addcommand !discord hi :)",
-			chat.Message{Platform: chat.Twitch, Channel: "chablades", User: "SomeMod", IsMod: true, Text: "!addcommand !discord hi :)"},
+			"@badge-info=;badges=moderator/1;display-name=SomeMod;mod=1;user-id=1 :somemod!somemod@somemod.tmi.twitch.tv PRIVMSG #chablades :$addcommand $discord hi :)",
+			chat.Message{Platform: chat.Twitch, Channel: "chablades", User: "SomeMod", IsMod: true, Text: "$addcommand $discord hi :)"},
 		},
 		{
 			"@badges=broadcaster/1;display-name=Chablades;mod=0 :chablades!chablades@chablades.tmi.twitch.tv PRIVMSG #chablades :hello",
 			chat.Message{Platform: chat.Twitch, Channel: "chablades", User: "Chablades", IsMod: true, Text: "hello"},
 		},
 		{
-			"@badges=;display-name=;mod=0 :viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #chablades :!discord",
-			chat.Message{Platform: chat.Twitch, Channel: "chablades", User: "viewer", IsMod: false, Text: "!discord"},
+			"@badges=;display-name=;mod=0 :viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #chablades :$discord",
+			chat.Message{Platform: chat.Twitch, Channel: "chablades", User: "viewer", IsMod: false, Text: "$discord"},
 		},
 	}
 	for _, tt := range tests {

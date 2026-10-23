@@ -2,6 +2,10 @@
 // listener (Twitch, YouTube) and every feature handler.
 package chat
 
+// Prefix starts every bot command, e.g. "$discord". It avoids "!" so
+// Chaebot doesn't collide with Nightbot/StreamElements-style bots.
+const Prefix = "$"
+
 type Platform string
 
 const (

@@ -15,9 +15,9 @@ import (
 const maxResponseLen = 500
 
 const (
-	addCmd  = "!addcommand"
-	editCmd = "!editcommand"
-	delCmd  = "!delcommand"
+	addCmd  = chat.Prefix + "addcommand"
+	editCmd = chat.Prefix + "editcommand"
+	delCmd  = chat.Prefix + "delcommand"
 )
 
 // Handler answers custom command triggers and the mod-only management
@@ -54,7 +54,7 @@ func (h *Handler) manage(name, args string) string {
 
 	if name == delCmd {
 		if trigger == "" {
-			return "Usage: " + delCmd + " !trigger"
+			return "Usage: " + delCmd + " " + chat.Prefix + "trigger"
 		}
 		if err := h.store.Delete(trigger); err != nil {
 			return describe(err, trigger)
@@ -63,7 +63,7 @@ func (h *Handler) manage(name, args string) string {
 	}
 
 	if trigger == "" || response == "" {
-		return fmt.Sprintf("Usage: %s !trigger response text", name)
+		return fmt.Sprintf("Usage: %s %strigger response text", name, chat.Prefix)
 	}
 	if problem := validate(trigger, response); problem != "" {
 		return problem
@@ -83,8 +83,8 @@ func (h *Handler) manage(name, args string) string {
 // validate returns a chat-ready description of what's wrong, or "" if the
 // command is acceptable.
 func validate(trigger, response string) string {
-	if len(trigger) < 2 || trigger[0] != '!' {
-		return "Triggers must start with ! (e.g. !discord)."
+	if len(trigger) <= len(chat.Prefix) || !strings.HasPrefix(trigger, chat.Prefix) {
+		return fmt.Sprintf("Triggers must start with %s (e.g. %sdiscord).", chat.Prefix, chat.Prefix)
 	}
 	switch trigger {
 	case addCmd, editCmd, delCmd:

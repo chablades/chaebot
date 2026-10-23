@@ -35,17 +35,18 @@ func TestLifecycle(t *testing.T) {
 		text string
 		want string // substring of the single expected reply; "" = no reply
 	}{
+		{false, "$discord", ""},
+		{true, "$addcommand $discord Join us at example.gg", "added"},
+		{false, "$discord", "Join us at example.gg"},
+		{false, "$DISCORD extra words", "Join us at example.gg"},
 		{false, "!discord", ""},
-		{true, "!addcommand !discord Join us at example.gg", "added"},
-		{false, "!discord", "Join us at example.gg"},
-		{false, "!DISCORD extra words", "Join us at example.gg"},
-		{true, "!addcommand !discord again", "already exists"},
-		{true, "!editcommand !discord New link", "updated"},
-		{false, "!discord", "New link"},
-		{true, "!editcommand !nope x", "doesn't exist"},
-		{true, "!delcommand !discord", "deleted"},
-		{false, "!discord", ""},
-		{true, "!delcommand !discord", "doesn't exist"},
+		{true, "$addcommand $discord again", "already exists"},
+		{true, "$editcommand $discord New link", "updated"},
+		{false, "$discord", "New link"},
+		{true, "$editcommand $nope x", "doesn't exist"},
+		{true, "$delcommand $discord", "deleted"},
+		{false, "$discord", ""},
+		{true, "$delcommand $discord", "doesn't exist"},
 	}
 	for _, s := range steps {
 		replies, _ := say(h, s.mod, s.text)
@@ -64,16 +65,16 @@ func TestLifecycle(t *testing.T) {
 func TestNonModCannotManage(t *testing.T) {
 	h, _ := newHandler(t)
 	for _, text := range []string{
-		"!addcommand !x hi",
-		"!editcommand !x hi",
-		"!delcommand !x",
+		"$addcommand $x hi",
+		"$editcommand $x hi",
+		"$delcommand $x",
 	} {
 		replies, consumed := say(h, false, text)
 		if len(replies) != 0 || !consumed {
 			t.Errorf("%q from viewer: replies=%q consumed=%v", text, replies, consumed)
 		}
 	}
-	if _, ok := h.store.Get("!x"); ok {
+	if _, ok := h.store.Get("$x"); ok {
 		t.Error("viewer was able to create a command")
 	}
 }
@@ -81,15 +82,15 @@ func TestNonModCannotManage(t *testing.T) {
 func TestValidation(t *testing.T) {
 	h, _ := newHandler(t)
 	for text, want := range map[string]string{
-		"!addcommand":                                "Usage",
-		"!addcommand !x":                             "Usage",
-		"!addcommand discord hi":                     "must start with !",
-		"!addcommand ! hi":                           "must start with !",
-		"!addcommand !addcommand hi":                 "built-in",
-		"!addcommand !x /ban someone":                "can't start with",
-		"!addcommand !x .timeout someone":            "can't start with",
-		"!addcommand !x " + strings.Repeat("a", 501): "too long",
-		"!delcommand":                                "Usage",
+		"$addcommand":                                "Usage",
+		"$addcommand $x":                             "Usage",
+		"$addcommand discord hi":                     "must start with $",
+		"$addcommand $ hi":                           "must start with $",
+		"$addcommand $addcommand hi":                 "built-in",
+		"$addcommand $x /ban someone":                "can't start with",
+		"$addcommand $x .timeout someone":            "can't start with",
+		"$addcommand $x " + strings.Repeat("a", 501): "too long",
+		"$delcommand":                                "Usage",
 	} {
 		replies, _ := say(h, true, text)
 		if len(replies) != 1 || !strings.Contains(replies[0], want) {
@@ -103,7 +104,7 @@ func TestValidation(t *testing.T) {
 
 func TestUnknownMessagesPassThrough(t *testing.T) {
 	h, _ := newHandler(t)
-	for _, text := range []string{"hello chat", "!uptime", ""} {
+	for _, text := range []string{"hello chat", "$uptime", ""} {
 		if _, consumed := say(h, false, text); consumed {
 			t.Errorf("%q should not be consumed", text)
 		}
@@ -112,18 +113,18 @@ func TestUnknownMessagesPassThrough(t *testing.T) {
 
 func TestPersistence(t *testing.T) {
 	h, path := newHandler(t)
-	say(h, true, "!addcommand !discord Join   us  (spacing kept)")
-	say(h, true, "!addcommand !gone bye")
-	say(h, true, "!delcommand !gone")
+	say(h, true, "$addcommand $discord Join   us  (spacing kept)")
+	say(h, true, "$addcommand $gone bye")
+	say(h, true, "$delcommand $gone")
 
 	reopened, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := reopened.Get("!discord"); got != "Join   us  (spacing kept)" {
+	if got, _ := reopened.Get("$discord"); got != "Join   us  (spacing kept)" {
 		t.Errorf("reloaded response = %q", got)
 	}
-	if _, ok := reopened.Get("!gone"); ok {
+	if _, ok := reopened.Get("$gone"); ok {
 		t.Error("deleted command came back after reload")
 	}
 }
