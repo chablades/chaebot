@@ -19,11 +19,20 @@ import (
 
 const ircAddr = "irc.chat.twitch.tv:6697"
 
-// Twitch allows 20 messages per 30 seconds for accounts that aren't
-// moderators; exceeding it locks the bot out of chat for a while.
+// Twitch allows 20 messages per 30 seconds, or 100 if the bot is a
+// moderator or the broadcaster; exceeding it locks the bot out of chat for
+// a while.
 const (
-	rateLimit  = 20
-	rateWindow = 30 * time.Second
+	rateLimit    = 20
+	modRateLimit = 100
+	rateWindow   = 30 * time.Second
+)
+
+// Twitch pings about every five minutes, so a longer silence means the
+// connection died without being closed. Variables so tests can shorten them.
+var (
+	readTimeout  = 6 * time.Minute
+	writeTimeout = 10 * time.Second
 )
 
 var errAuth = errors.New("twitch: login authentication failed (check the OAuth token)")
@@ -35,23 +44,51 @@ type Client struct {
 	Channel   string // channel login to join, without '#'
 	OnMessage func(chat.Message)
 
-	mu   sync.Mutex
-	conn net.Conn
-	sent []time.Time // send times within the current rate window
+	// Refresh, if set, is called when Twitch rejects Token, and returns a
+	// new one. If it fails with ErrRefreshDenied, Run gives up; other
+	// errors are retried with backoff.
+	Refresh func(ctx context.Context) (string, error)
+
+	dial func(ctx context.Context) (net.Conn, error) // nil dials Twitch; set by tests
+
+	mu    sync.Mutex
+	conn  net.Conn
+	isMod bool        // from USERSTATE; raises the rate limit
+	sent  []time.Time // send times within the current rate window
 }
 
 // Run connects and processes chat until ctx is cancelled, reconnecting
-// with backoff on connection loss. It returns early on auth failure.
+// with backoff on connection loss. It returns early if the token is
+// rejected and can't be refreshed.
 func (c *Client) Run(ctx context.Context) error {
 	backoff := time.Second
+	refreshed := false // token refreshed since the last successful login
 	for {
 		start := time.Now()
-		err := c.session(ctx)
+		loggedIn, err := c.session(ctx)
 		if ctx.Err() != nil {
 			return nil
 		}
+		if loggedIn {
+			refreshed = false
+		}
 		if errors.Is(err, errAuth) {
-			return err
+			if c.Refresh == nil || refreshed {
+				return err
+			}
+			log.Printf("twitch: token rejected, refreshing")
+			token, rerr := c.Refresh(ctx)
+			if errors.Is(rerr, ErrRefreshDenied) {
+				return errors.Join(err, rerr)
+			}
+			if rerr == nil {
+				c.mu.Lock()
+				c.Token = token
+				c.mu.Unlock()
+				refreshed = true
+				continue
+			}
+			err = rerr
 		}
 		if time.Since(start) > time.Minute {
 			backoff = time.Second
@@ -81,7 +118,11 @@ func (c *Client) Say(text string) {
 		}
 	}
 	c.sent = recent
-	if len(c.sent) >= rateLimit {
+	limit := rateLimit
+	if c.isMod {
+		limit = modRateLimit
+	}
+	if len(c.sent) >= limit {
 		log.Printf("twitch: rate limit reached, dropping message %q", text)
 		return
 	}
@@ -90,13 +131,24 @@ func (c *Client) Say(text string) {
 	text = strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
 	if err := c.write("PRIVMSG #%s :%s", c.Channel, text); err != nil {
 		log.Printf("twitch: send failed: %v", err)
+		// A timed-out write leaves the connection unusable; closing it
+		// makes the reader reconnect.
+		c.conn.Close()
 	}
 }
 
-func (c *Client) session(ctx context.Context) error {
-	conn, err := (&tls.Dialer{}).DialContext(ctx, "tcp", ircAddr)
+// session runs one connection until it fails. loggedIn reports whether
+// Twitch accepted the login before then.
+func (c *Client) session(ctx context.Context) (loggedIn bool, err error) {
+	dial := c.dial
+	if dial == nil {
+		dial = func(ctx context.Context) (net.Conn, error) {
+			return (&tls.Dialer{}).DialContext(ctx, "tcp", ircAddr)
+		}
+	}
+	conn, err := dial(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer conn.Close()
 	stop := context.AfterFunc(ctx, func() { conn.Close() })
@@ -104,6 +156,7 @@ func (c *Client) session(ctx context.Context) error {
 
 	c.mu.Lock()
 	c.conn = conn
+	c.isMod = false
 	token := strings.TrimPrefix(c.Token, "oauth:")
 	err = errors.Join(
 		c.write("CAP REQ :twitch.tv/tags twitch.tv/commands"),
@@ -118,12 +171,18 @@ func (c *Client) session(ctx context.Context) error {
 		c.mu.Unlock()
 	}()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	sc := bufio.NewScanner(conn)
 	sc.Buffer(make([]byte, 64*1024), 64*1024)
-	for sc.Scan() {
+	for {
+		if err := conn.SetReadDeadline(time.Now().Add(readTimeout)); err != nil {
+			return loggedIn, err
+		}
+		if !sc.Scan() {
+			break
+		}
 		line := parseLine(sc.Text())
 		switch line.command {
 		case "PING":
@@ -131,17 +190,22 @@ func (c *Client) session(ctx context.Context) error {
 			err := c.write("PONG :%s", line.trailing)
 			c.mu.Unlock()
 			if err != nil {
-				return err
+				return loggedIn, err
 			}
 		case "RECONNECT":
-			return errors.New("server requested reconnect")
+			return loggedIn, errors.New("server requested reconnect")
 		case "NOTICE":
 			if strings.Contains(line.trailing, "authentication failed") ||
 				strings.Contains(line.trailing, "Improperly formatted auth") {
-				return errAuth
+				return loggedIn, errAuth
 			}
 		case "001":
+			loggedIn = true
 			log.Printf("twitch: connected to #%s", c.Channel)
+		case "USERSTATE":
+			c.mu.Lock()
+			c.isMod = line.isMod()
+			c.mu.Unlock()
 		case "PRIVMSG":
 			if c.OnMessage != nil {
 				c.OnMessage(line.message())
@@ -149,13 +213,16 @@ func (c *Client) session(ctx context.Context) error {
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return err
+		return loggedIn, err
 	}
-	return errors.New("connection closed")
+	return loggedIn, errors.New("connection closed")
 }
 
 // write sends one IRC line; callers must hold c.mu.
 func (c *Client) write(format string, args ...any) error {
+	if err := c.conn.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+		return err
+	}
 	_, err := fmt.Fprintf(c.conn, format+"\r\n", args...)
 	return err
 }
@@ -178,7 +245,7 @@ func parseLine(s string) ircLine {
 		l.tags = map[string]string{}
 		for _, kv := range strings.Split(raw, ";") {
 			k, v, _ := strings.Cut(kv, "=")
-			l.tags[k] = v
+			l.tags[k] = unescapeTag(v)
 		}
 	}
 	if strings.HasPrefix(s, ":") {
@@ -192,6 +259,43 @@ func parseLine(s string) ircLine {
 	return l
 }
 
+// unescapeTag decodes an IRCv3 tag value, where `\:` is ';', `\s` is a
+// space and `\\` is a backslash.
+func unescapeTag(v string) string {
+	if !strings.Contains(v, `\`) {
+		return v
+	}
+	var b strings.Builder
+	for i := 0; i < len(v); i++ {
+		if v[i] != '\\' {
+			b.WriteByte(v[i])
+			continue
+		}
+		i++
+		if i == len(v) {
+			break // a trailing lone backslash is dropped
+		}
+		switch v[i] {
+		case ':':
+			b.WriteByte(';')
+		case 's':
+			b.WriteByte(' ')
+		case 'r':
+			b.WriteByte('\r')
+		case 'n':
+			b.WriteByte('\n')
+		default:
+			b.WriteByte(v[i])
+		}
+	}
+	return b.String()
+}
+
+// isMod reports whether the line's sender is a moderator or the broadcaster.
+func (l ircLine) isMod() bool {
+	return l.tags["mod"] == "1" || strings.Contains(l.tags["badges"], "broadcaster/")
+}
+
 func (l ircLine) message() chat.Message {
 	nick, _, _ := strings.Cut(l.prefix, "!")
 	user := l.tags["display-name"]
@@ -202,11 +306,17 @@ func (l ircLine) message() chat.Message {
 	if len(l.params) > 0 {
 		channel = strings.TrimPrefix(l.params[0], "#")
 	}
+	text := l.trailing
+	// "/me hello" arrives as "\x01ACTION hello\x01"; unwrap it so commands
+	// still work.
+	if action, ok := strings.CutPrefix(text, "\x01ACTION "); ok {
+		text = strings.TrimSuffix(action, "\x01")
+	}
 	return chat.Message{
 		Platform: chat.Twitch,
 		Channel:  channel,
 		User:     user,
-		IsMod:    l.tags["mod"] == "1" || strings.Contains(l.tags["badges"], "broadcaster/"),
-		Text:     l.trailing,
+		IsMod:    l.isMod(),
+		Text:     text,
 	}
 }

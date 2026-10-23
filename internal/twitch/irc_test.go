@@ -23,6 +23,10 @@ func TestParsePrivmsg(t *testing.T) {
 			"@badges=;display-name=;mod=0 :viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #chablades :$discord",
 			chat.Message{Platform: chat.Twitch, Channel: "chablades", User: "viewer", IsMod: false, Text: "$discord"},
 		},
+		{ // /me message
+			"@badges=;display-name=Viewer;mod=0 :viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #chablades :\x01ACTION $discord\x01",
+			chat.Message{Platform: chat.Twitch, Channel: "chablades", User: "Viewer", IsMod: false, Text: "$discord"},
+		},
 	}
 	for _, tt := range tests {
 		l := parseLine(tt.line)
@@ -39,5 +43,21 @@ func TestParsePing(t *testing.T) {
 	l := parseLine("PING :tmi.twitch.tv")
 	if l.command != "PING" || l.trailing != "tmi.twitch.tv" {
 		t.Errorf("got %+v", l)
+	}
+}
+
+func TestUnescapeTag(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain":       "plain",
+		`a\sb`:        "a b",
+		`x\:y`:        "x;y",
+		`back\\slash`: `back\slash`,
+		`cr\rlf\n`:    "cr\rlf\n",
+		`unknown\q`:   "unknownq",
+		`trailing\`:   "trailing",
+	} {
+		if got := unescapeTag(in); got != want {
+			t.Errorf("unescapeTag(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
