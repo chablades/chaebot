@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chaebot</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img class="logo" src="chaebot.png" alt="">Chaebot</div>
+    <div class="status" id="status" data-state="stopped" role="status">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="status-label" id="status-label">Stopped</span>
+      <span class="status-detail" id="status-detail"></span>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="settings-btn" type="button">Settings</button>
+    <button class="btn primary" id="toggle-btn" type="button">Start bot</button>
+  </header>
+
+  <main class="layout">
+    <section class="panel" aria-labelledby="chat-title">
+      <div class="panel-head">
+        <h2 id="chat-title">Chat</h2>
+        <span class="muted" id="channel-label"></span>
+        <div class="spacer"></div>
+        <button class="btn ghost small" id="clear-chat" type="button">Clear</button>
+      </div>
+      <ol class="feed" id="feed" aria-live="polite">
+        <li class="empty" id="feed-empty">
+          <img class="empty-art" src="chaebot.png" alt="">
+          <span>Messages from your channel show up here once the bot is connected.</span>
+        </li>
+      </ol>
+      <form class="composer" id="composer">
+        <input id="say-input" autocomplete="off" spellcheck="true" placeholder="Start the bot to send messages" disabled>
+        <button class="btn primary" id="say-btn" type="submit" disabled>Send</button>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="cmd-title">
+      <div class="panel-head">
+        <h2 id="cmd-title">Commands</h2>
+        <span class="count" id="cmd-count">0</span>
+        <div class="spacer"></div>
+        <button class="btn primary small" id="new-cmd-btn" type="button">New command</button>
+      </div>
+
+      <form class="cmd-form" id="new-cmd" hidden>
+        <label class="field">
+          <span>Trigger</span>
+          <span class="prefixed"><span class="prefix">$</span><input id="new-trigger" autocomplete="off" spellcheck="false" placeholder="discord"></span>
+        </label>
+        <label class="field">
+          <span>Response</span>
+          <textarea id="new-response" rows="3" placeholder="Join us at discord.gg/…"></textarea>
+        </label>
+        <div class="form-foot">
+          <span class="error" id="new-error"></span>
+          <span class="counter" id="new-counter">0/500</span>
+          <button class="btn ghost small" id="new-cancel" type="button">Cancel</button>
+          <button class="btn primary small" type="submit">Add command</button>
+        </div>
+      </form>
+
+      <div class="filter-row">
+        <input type="search" id="cmd-filter" placeholder="Filter commands" autocomplete="off">
+      </div>
+      <ul class="cmd-list" id="cmd-list"></ul>
+    </section>
+  </main>
+
+  <details class="logs" id="logs">
+    <summary>Bot log</summary>
+    <pre id="log-lines"></pre>
+  </details>
+
+  <dialog class="settings" id="settings">
+    <form method="dialog" id="settings-form">
+      <h2>Settings</h2>
+      <label class="field">
+        <span>Bot account</span>
+        <input id="set-username" autocomplete="off" spellcheck="false" placeholder="chae_bot">
+        <small>The Twitch account the bot posts as.</small>
+      </label>
+      <label class="field">
+        <span>Channel</span>
+        <input id="set-channel" autocomplete="off" spellcheck="false" placeholder="chablades">
+        <small>The channel the bot joins.</small>
+      </label>
+      <label class="field">
+        <span>OAuth token</span>
+        <span class="with-action">
+          <input id="set-token" type="password" autocomplete="off" spellcheck="false" placeholder="oauth:…">
+          <button class="btn ghost small" id="toggle-token" type="button">Show</button>
+        </span>
+        <small>Needs the <code>chat:read</code> and <code>chat:edit</code> scopes. You can get one from
+          <a href="#" id="token-link">twitchtokengenerator.com</a>.</small>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="set-autostart">
+        <span>Connect when Chaebot opens</span>
+      </label>
+      <p class="data-dir">Commands, settings and the log are saved in <button class="link" id="open-data" type="button"></button></p>
+      <div class="form-foot">
+        <span class="error" id="settings-error"></span>
+        <button class="btn ghost" id="settings-cancel" type="button">Cancel</button>
+        <button class="btn primary" id="settings-save" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

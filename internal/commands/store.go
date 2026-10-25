@@ -21,9 +21,19 @@ var (
 // mapping trigger (e.g. "$discord") to response. It is safe for concurrent
 // use so both platform listeners can share one instance.
 type Store struct {
+	// OnChange, if set, is called after every successful change. Set it
+	// before the store is shared.
+	OnChange func()
+
 	mu   sync.RWMutex
 	path string
 	cmds map[string]string
+}
+
+// Command is one custom command.
+type Command struct {
+	Trigger  string `json:"trigger"`
+	Response string `json:"response"`
 }
 
 // Open loads the store from path, starting empty if the file doesn't exist.
@@ -61,6 +71,18 @@ func (s *Store) Triggers() []string {
 	return out
 }
 
+// List returns all commands sorted by trigger.
+func (s *Store) List() []Command {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Command, 0, len(s.cmds))
+	for t, r := range s.cmds {
+		out = append(out, Command{Trigger: t, Response: r})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Trigger < out[j].Trigger })
+	return out
+}
+
 func (s *Store) Add(trigger, response string) error {
 	return s.update(func() error {
 		if _, ok := s.cmds[trigger]; ok {
@@ -91,9 +113,21 @@ func (s *Store) Delete(trigger string) error {
 	}, trigger)
 }
 
-// update applies change under the write lock and persists the result,
-// restoring trigger's previous state if the save fails.
+// update applies change and reports it to OnChange. The callback runs
+// after the lock is released so it can read the store.
 func (s *Store) update(change func() error, trigger string) error {
+	if err := s.apply(change, trigger); err != nil {
+		return err
+	}
+	if s.OnChange != nil {
+		s.OnChange()
+	}
+	return nil
+}
+
+// apply runs change under the write lock and persists the result,
+// restoring trigger's previous state if the save fails.
+func (s *Store) apply(change func() error, trigger string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	prev, existed := s.cmds[trigger]

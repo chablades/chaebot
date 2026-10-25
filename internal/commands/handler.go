@@ -65,7 +65,7 @@ func (h *Handler) manage(name, args string) string {
 	if trigger == "" || response == "" {
 		return fmt.Sprintf("Usage: %s %strigger response text", name, chat.Prefix)
 	}
-	if problem := validate(trigger, response); problem != "" {
+	if problem := Validate(trigger, response); problem != "" {
 		return problem
 	}
 	if name == addCmd {
@@ -80,9 +80,9 @@ func (h *Handler) manage(name, args string) string {
 	return fmt.Sprintf("Command %s updated.", trigger)
 }
 
-// validate returns a chat-ready description of what's wrong, or "" if the
+// Validate returns a chat-ready description of what's wrong, or "" if the
 // command is acceptable.
-func validate(trigger, response string) string {
+func Validate(trigger, response string) string {
 	if len(trigger) <= len(chat.Prefix) || !strings.HasPrefix(trigger, chat.Prefix) {
 		return fmt.Sprintf("Triggers must start with %s (e.g. %sdiscord).", chat.Prefix, chat.Prefix)
 	}

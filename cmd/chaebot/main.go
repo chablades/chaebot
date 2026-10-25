@@ -1,30 +1,28 @@
-// Command chaebot runs the Chaebot chat bot.
+// Command chaebot runs the Chaebot chat bot without the desktop UI.
 package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 
 	"chaebot/internal/chat"
 	"chaebot/internal/commands"
+	"chaebot/internal/config"
 	"chaebot/internal/twitch"
 )
 
 func main() {
-	if err := loadDotEnv(".env"); err != nil {
+	if err := config.LoadDotEnv(".env"); err != nil {
 		log.Fatal(err)
 	}
 	username := requireEnv("CHAEBOT_TWITCH_USERNAME")
 	token := requireEnv("CHAEBOT_TWITCH_TOKEN")
 	channel := requireEnv("CHAEBOT_TWITCH_CHANNEL")
 
-	dataDir, err := dataDir()
+	dataDir, err := config.DataDir()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -39,8 +37,13 @@ func main() {
 	}
 
 	tw := &twitch.Client{Username: username, Token: token, Channel: channel}
+	say := func(text string) {
+		if err := tw.Say(text); err != nil {
+			log.Printf("twitch: %v", err)
+		}
+	}
 	tw.OnMessage = func(msg chat.Message) {
-		chat.Dispatch(handlers, msg, tw.Say)
+		chat.Dispatch(handlers, msg, say)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -48,46 +51,6 @@ func main() {
 	if err := tw.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
-}
-
-// dataDir is where Chaebot keeps its saved state, overridable with
-// CHAEBOT_DATA_DIR.
-func dataDir() (string, error) {
-	if dir := os.Getenv("CHAEBOT_DATA_DIR"); dir != "" {
-		return dir, nil
-	}
-	base, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "Chaebot"), nil
-}
-
-// loadDotEnv sets KEY=VALUE pairs from path as environment variables,
-// without overriding ones already set. A missing file is not an error.
-func loadDotEnv(path string) error {
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	for i, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
-		if !ok {
-			return fmt.Errorf("%s:%d: expected KEY=VALUE", path, i+1)
-		}
-		key, value = strings.TrimSpace(key), strings.Trim(strings.TrimSpace(value), `"'`)
-		if _, set := os.LookupEnv(key); !set {
-			os.Setenv(key, value)
-		}
-	}
-	return nil
 }
 
 func requireEnv(key string) string {

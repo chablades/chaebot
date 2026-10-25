@@ -1,4 +1,5 @@
 /chaebot
 /chaebot.exe
-/build/
+/build/bin/
 .env
+/frontend/wailsjs/

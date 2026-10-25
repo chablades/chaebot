@@ -34,6 +34,11 @@ type Client struct {
 	Token     string // OAuth token with chat:read and chat:edit scopes
 	Channel   string // channel login to join, without '#'
 	OnMessage func(chat.Message)
+	// OnConnect, if set, is called each time the bot logs in to chat.
+	OnConnect func()
+	// OnDisconnect, if set, is called when the connection drops and Run
+	// is about to retry after retryIn.
+	OnDisconnect func(err error, retryIn time.Duration)
 
 	mu   sync.Mutex
 	conn net.Conn
@@ -57,6 +62,9 @@ func (c *Client) Run(ctx context.Context) error {
 			backoff = time.Second
 		}
 		log.Printf("twitch: disconnected (%v), reconnecting in %s", err, backoff)
+		if c.OnDisconnect != nil {
+			c.OnDisconnect(err, backoff)
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -66,12 +74,13 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 }
 
-// Say posts text to the channel, dropping it if the rate limit is reached.
-func (c *Client) Say(text string) {
+// Say posts text to the channel. It drops the message and returns an error
+// if the bot isn't connected or the rate limit is reached.
+func (c *Client) Say(text string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.conn == nil {
-		return
+		return errors.New("not connected to chat")
 	}
 	now := time.Now()
 	recent := c.sent[:0]
@@ -82,15 +91,15 @@ func (c *Client) Say(text string) {
 	}
 	c.sent = recent
 	if len(c.sent) >= rateLimit {
-		log.Printf("twitch: rate limit reached, dropping message %q", text)
-		return
+		return fmt.Errorf("rate limit reached (%d messages per %s)", rateLimit, rateWindow)
 	}
 	c.sent = append(c.sent, now)
 	// IRC lines end at a newline, so collapse any to keep the message whole.
 	text = strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
 	if err := c.write("PRIVMSG #%s :%s", c.Channel, text); err != nil {
-		log.Printf("twitch: send failed: %v", err)
+		return fmt.Errorf("send failed: %w", err)
 	}
+	return nil
 }
 
 func (c *Client) session(ctx context.Context) error {
@@ -142,6 +151,9 @@ func (c *Client) session(ctx context.Context) error {
 			}
 		case "001":
 			log.Printf("twitch: connected to #%s", c.Channel)
+			if c.OnConnect != nil {
+				c.OnConnect()
+			}
 		case "PRIVMSG":
 			if c.OnMessage != nil {
 				c.OnMessage(line.message())

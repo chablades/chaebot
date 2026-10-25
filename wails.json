@@ -1,0 +1,15 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Chaebot",
+  "outputfilename": "Chaebot",
+  "assetdir": "frontend",
+  "frontend:install": "",
+  "frontend:build": "",
+  "author": {
+    "name": "Cha"
+  },
+  "info": {
+    "productName": "Chaebot",
+    "comments": "Chat bot for twitch.tv/chablades"
+  }
+}
